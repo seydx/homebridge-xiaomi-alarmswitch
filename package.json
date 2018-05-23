@@ -1,0 +1,36 @@
+{
+  "name": "homebridge-xiaomi-alarmswitch",
+  "version": "1.1.0",
+  "description": "homebridge-xiaomi-alarmswitch",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeydX/homebridge-xiaomi-alarmswitch.git"
+  },
+  "author": "SeydX (https://github.com/SeydX/homebridge-xiaomi-alarmswitch)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SeydX/homebridge-xiaomi-alarmswitch/issues"
+  },
+  "homepage": "https://github.com/SeydX/homebridge-xiaomi-alarmswitch#readme",
+  "keywords": [
+    "alarm",
+    "switch",
+    "homebridge",
+    "plugin",
+    "homebridge-plugin"
+  ],
+  "engines": {
+    "node": ">=0.12.0",
+    "homebridge": ">=0.2.0"
+  },
+  "dependencies": {
+    "moment": "^2.22.1",
+    "miio": "^0.15.6",
+    "node-persist": "0.0.8"
+  }
+}

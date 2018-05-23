@@ -13,6 +13,8 @@ This homebridge plugin exposes Xiaomi Aqara switches setted in config.json as sw
 
 Well, i'm using this switch for activating/deactivating my house alarm. Normally i need to single click on the button for activating the alarm and double click for deactivating. But this seems not to be secure. Because of this, i have created this plugin to give these switches a special functionality!.
 
+[Plugin in action](https://www.dropbox.com/s/y2i19sba0881pxj/Video%2022.05.18%2C%2009%2011%2008.mov?dl=0)
+
 
 ## Compatible switches
 

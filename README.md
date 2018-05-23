@@ -156,6 +156,8 @@ This plugin has been verified to work with the following apps on iOS 11.3.1:
 - [ ] "Learn Code" Function
 - [ ] Prorammable switch
 - [ ] Option to set also the order of clicks
+- [ ] Expose automatically all available switches
+- [ ] Dynamically remove/add switches
 
 
 ## Contributing

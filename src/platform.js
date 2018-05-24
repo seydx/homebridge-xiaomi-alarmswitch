@@ -16,8 +16,6 @@ module.exports = function (homebridge) {
 };
 
 function AlarmSwitch (log, config, api) {
-  //if (!api||!config) return;
-  //if (!config.ip||!config.token)throw new Error('Please check your config.json!');
 
   // HB
   const self = this;
@@ -53,7 +51,7 @@ AlarmSwitch.prototype = {
   didFinishLaunching: function(){
     const self = this;
     if(!this.config.ip||!this.config.token){
-      this.logger.warn('No ip address and/or no token could be found in config.json, looking in storage..');
+      this.logger.warn('No ip address and/or no token could be found in config, looking in storage..');
       self.getIpAndToken(function (err, data) {
         if(err){
           self.logger.error('An error occured by getting ip adresse and token, trying again...');
@@ -62,21 +60,29 @@ AlarmSwitch.prototype = {
             self.didFinishLaunching();
           }, 10000);
         } else {
-          self.initPlatform(data);
+          !Object.keys(self.switches).length ? self.getDeviceID(data) : self.initPlatform(data);
         }
       }); 
     } else {
-      this.logger.info('Ip adresse and token found in config.json! Skip requesting...');
-      this.initPlatform({'ip':this.config.ip,'token':this.config.token});
+      if(!Object.keys(this.switches).length){
+        self.getDeviceID({'ip':this.config.ip,'token':this.config.token});
+      } else {
+        this.logger.info('IP adress and token found in config! Skip requesting...');
+        this.initPlatform({'ip':this.config.ip,'token':this.config.token});
+      }
     }
   },
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Get Gateway & Switch info
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
   
   getIpAndToken: function(callback){
     const self = this;
     if(!this.storage.getItem('XiaomiGateway')){
       this.logger.warn('No gateway information in storage, requesting...');
       const browser = miio.browse({
-        cacheTime: 300 // 5 minutes. Default is 1800 seconds (30 minutes)
+        cacheTime: 300
       });
       browser.on('available', device => {
         if(!device.token)callback(device.id + ' hides his token! Please put ip adresse and token manually in config.json!');
@@ -93,22 +99,92 @@ AlarmSwitch.prototype = {
     }
   },
   
+  getDeviceID: function(data){
+    const self = this;
+    const deviceArray = [];
+    this.logger.warn('Can not find any switches in config! Searching...');
+    miio.device({ address: data.ip, token: data.token })
+      .then(device => {
+        self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']. Searching devices...');
+        const children = device.children();
+        for(const child of children){
+          if(child.matches('type:button')&&child.miioModel.match('lumi.switch')){
+            deviceArray.push(child.internalId);
+          }
+        }
+        if(deviceArray.length){
+          self.logger.info('Found ' + deviceArray.length + ' switch(es)!');
+          self.logger.info('Please add the Device ID(s) from the switch(es) you want to control in your config.json and restart homebridge!');
+          for(const ids in deviceArray){
+            self.logger.info('(' + ids + ') Device ID: ' + deviceArray[ids]);
+          }
+          self.log('**************************************************************');
+          self.log('                                                              ');
+          self.log('    Example config.json                                       ');
+          self.log('                                                              ');
+          self.log('    {                                                         ');
+          self.log('      "platform":"AlarmSwitch",                               ');
+          self.log('      "name":"%s",                                            ', self.config.name||'Alarm');
+          self.log('      "ip":"%s",                                              ', data.ip);
+          self.log('      "token":"%s",                                           ', data.token);
+          self.log('      "switches":{                                            ');
+          self.log('          "%s":{                                              ', deviceArray[0]);
+          self.log('               "type": 1,                                     ');
+          self.log('               "disable":false,                               ');
+          self.log('               "resetTimer":10,                               ');
+          self.log('               "singleClick":1,                               ');
+          self.log('               "doubleClick":2                                ');
+          self.log('          }                                                   ');
+          self.log('      }                                                       ');
+          self.log('    }                                                         ');
+          self.log('                                                              ');
+          self.log('**************************************************************');
+          self.logger.info('Closing connection...');
+        } else {
+          self.logger.warn('Can not find any connected switches!');
+          self.logger.warn('Closing current connection for trying again...');
+          setTimeout(function(){
+            self.logger.info('Reconnecting...');
+            self.getDeviceID(data);
+          }, 10000);
+        }
+        device.destroy();
+      })
+      .catch(err => {
+        self.logger.error('An error occured by searching devices! Trying again...');
+        self.logger.error(err);
+        setTimeout(function(){
+          self.logger.info('Reconnecting...');
+          self.getDeviceID(data);
+        }, 10000);
+      });
+  },
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Init Platform
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  
   initPlatform: function(data){
     let parameter = {};
     for(const id of Object.keys(this.switches)) {
       if(!this.switches[id].disable){
         let skip = false;
         for (const i in this.accessories) {
-          if (this.accessories[i].context.deviceID == id) {
+          if (this.accessories[i].context.deviceID == id&&this.accessories[i].context.type == this.switches[id].type) {
             skip = true;
+          }
+          if (this.accessories[i].context.deviceID == id&&this.accessories[i].context.type != this.switches[id].type) {
+            this.removeAccessory(this.accessories[i]);
           }
         }
         if (!skip) {
           parameter['name'] = this.config.name + ' ' + id;
           parameter['deviceID'] = id;
-          parameter['model'] = 'lumi.switch';
           parameter['ip'] = data.ip;
           parameter['token'] = data.token;
+          if(this.switches[id].type < 1||this.switches[id].type > 3)this.switches[id].type = 1;
+          parameter['type'] = this.switches[id].type||1;
+          parameter['model'] = 'lumi.alarm';
           parameter['disable'] = this.switches[id].disable||false;
           parameter['resetTimer'] = this.switches[id].resetTimer||10;
           parameter['singleClick'] = this.switches[id].singleClick||1;
@@ -117,7 +193,7 @@ AlarmSwitch.prototype = {
         }
       } else {
         for (const i in this.accessories) {
-          if (this.accessories[i].context.model == 'lumi.switch'&&this.accessories[i].context.deviceID==id) {
+          if (this.accessories[i].context.deviceID==id) {
             this.removeAccessory(this.accessories[i]);
           }
         }
@@ -125,40 +201,59 @@ AlarmSwitch.prototype = {
     }
     if(!Object.keys(this.switches).length){
       for (const i in this.accessories) {
-        if (this.accessories[i].context.model == 'lumi.switch') {
+        if (this.accessories[i].context.model == 'lumi.alarm') {
           this.removeAccessory(this.accessories[i]);
         }
       }
     }
   },
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Configure Accessories
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 
   configureAccessory: function (accessory) {
-    this.logger.info('Configuring accessory from cache: ' + accessory.displayName);
-    accessory.reachable = true;     
+    this.logger.info('Configuring accessory from cache: ' + accessory.displayName + ' [' + accessory.context.typeName + ']');
+    let skip = false;
+    //Refresh Context  
+    accessory.reachable = true;   
     if(this.config.ip&&this.config.token){
-      //Refresh ip and token from config
       accessory.context.ip = this.config.ip;
       accessory.context.token = this.config.token;
     } else if(this.storage.getItem('XiaomiGateway')){
-      //Refresh ip and token from storage
       accessory.context.ip = this.storage.getItem('XiaomiGateway').ip;
       accessory.context.token = this.storage.getItem('XiaomiGateway').token;
     }
     for(const id of Object.keys(this.switches)) {
-      if(id == accessory.context.deviceID){
+      if(id == accessory.context.deviceID){	 
+        skip = true;    
         accessory.context.singleClick = this.switches[id].singleClick||1;
         accessory.context.doubleClick = this.switches[id].doubleClick||1;
         accessory.context.resetTimer = this.switches[id].resetTimer||10;
-        accessory.context.disable = this.switches[id].disable;
+        if(this.switches[id].type!=accessory.context.type){
+          accessory.context.disable = true;
+        } else {
+          accessory.context.disable = this.switches[id].disable||false;
+        }
       }
+      if(!skip){
+        accessory.context.disable = true;
+      }
+    }
+    if(!Object.keys(this.switches).length){
+      accessory.context.disable = true;
     }
     this.accessories[accessory.displayName] = accessory;
     new Device(this, accessory, false);
   },
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Remove Accessories
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 
   removeAccessory: function (accessory) {
     if (accessory) {
-      this.logger.warn('Removing accessory: ' + accessory.displayName + '. No longer configured.');
+      this.logger.warn('Removing accessory: ' + accessory.displayName + ' [' + accessory.context.typeName + ']. No longer configured.');
       this.api.unregisterPlatformAccessories(pluginName, platformName, [accessory]);
       delete this.accessories[accessory.displayName];
     }

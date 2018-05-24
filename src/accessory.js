@@ -30,6 +30,7 @@ class Alarm_Switch {
     this.timer;
     this.shortCount = 0;
     this.doubleCount = 0;
+    this.error = 0;
     
     if (publish) {
       this.addAccessory(parameter);
@@ -207,6 +208,7 @@ class Alarm_Switch {
     if(!accessory.context.disable){
       miio.device({address: accessory.context.ip, token: accessory.context.token})
         .then(device => {
+          self.switchError = 0;
           self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']');
           self.logger.info('Searching for switch with ID:' + accessory.context.deviceID);
           self.initialTimer(accessory, self.timer);
@@ -258,11 +260,19 @@ class Alarm_Switch {
           }
         })
         .catch(err => {
-          self.logger.error('An error occured by connecting to gateway, trying again!');
-          self.logger.error(err);
-          setTimeout(function(){
-            self.getSwitchState(accessory, service);
-          }, 10000);
+          if(self.switchError > 5){
+            self.switchError = 0;
+            self.logger.error('An error occured by connecting to gateway, trying again!');
+            self.logger.error(err);
+            setTimeout(function(){
+              self.getSwitchState(accessory, service);
+            }, 30000);
+          } else {
+            self.switchError += 1;
+            setTimeout(function(){
+              self.getSwitchState(accessory, service);
+            }, 15000);
+          }
         });
     }
   }
@@ -311,6 +321,7 @@ class Alarm_Switch {
                   }
                 }
               }
+              self.error = 0;
               device.destroy();
               setTimeout(function(){
                 self.getAlarm(accessory, service);
@@ -332,17 +343,19 @@ class Alarm_Switch {
             });
         })
         .catch(err => {
-          self.logger.error(accessory.displayName + ': An error occured by connecting to gateway for getting new alarm state!');
-          self.logger.error(err);
-          if(type == 1){
-            service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
-            service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
-          } else if(type == 2){
-            service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+          if(self.error > 5){
+            self.error = 0;
+            self.logger.error(accessory.displayName + ': An error occured by connecting to gateway for getting new alarm state!');
+            self.logger.error(err);
+            setTimeout(function(){
+              self.getAlarm(accessory, service);
+            }, 60000);
+          } else {
+            self.error += 1;
+            setTimeout(function(){
+              self.getAlarm(accessory, service);
+            }, 30000);
           }
-          setTimeout(function(){
-            self.getAlarm(accessory, service);
-          }, 30000);
         });
     }
   }

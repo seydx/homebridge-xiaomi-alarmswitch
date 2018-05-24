@@ -103,6 +103,8 @@ AlarmSwitch.prototype = {
     const self = this;
     const deviceArray = [];
     this.logger.warn('Can not find any switches in config! Searching...');
+    if(this.storage.getItem('DeviceIDs'))self.logger.info("There are stored Device IDs in your persist folder!");
+    this.logger.warn('Can not find any switches in config! Searching...');
     miio.device({ address: data.ip, token: data.token })
       .then(device => {
         self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']. Searching devices...');
@@ -113,7 +115,8 @@ AlarmSwitch.prototype = {
           }
         }
         if(deviceArray.length){
-          self.logger.info('Found ' + deviceArray.length + ' switch(es)!');
+          self.logger.info('Found ' + deviceArray.length + ' switch(es)! Storing switches...');
+          self.storage.setItem('DeviceIDs', deviceArray);
           self.logger.info('Please add the Device ID(s) from the switch(es) you want to control in your config.json and restart homebridge!');
           for(const ids in deviceArray){
             self.logger.info('(' + ids + ') Device ID: ' + deviceArray[ids]);

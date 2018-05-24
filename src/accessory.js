@@ -38,28 +38,56 @@ class Alarm_Switch {
     }
   }
   
-  /********************************************************************************************************************************************************/
-  /********************************************************************************************************************************************************/
-  /********************************************************************* ADD ACCESSORY ********************************************************************/
-  /********************************************************************************************************************************************************/
-  /********************************************************************************************************************************************************/
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Add Accessories
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 
   addAccessory (parameter) {
     var accessory;
     let name = parameter.name;
+    let type = parameter.type;
+    let deviceType;
+    let accessoryType;
+    let typeName;
+    
+    if(type == 1){
+      typeName = 'ALARM';
+    } else if(type == 2){
+      typeName = 'VIRTUAL SWITCH';  
+    } else {
+      typeName = 'PROGRAMMABLE SWITCH';  
+    }
 
-    this.logger.info('Publishing new accessory: ' + name);
+    this.logger.info('Publishing new accessory: ' + name + ' [' + typeName + ']');
 
     accessory = this.accessories[name];
     const uuid = UUIDGen.generate(name);
-
-    accessory = new PlatformAccessory(name, uuid, Accessory.Categories.SWITCH);
-    accessory.addService(Service.Switch, name);
+    
+    switch(type){
+      case 1: // ALARM
+        deviceType = Accessory.Categories.SECURITY_SYSTEM;
+        accessoryType = Service.SecuritySystem;
+        break;
+      case 2: // VIRTUAL SWITCH
+        deviceType = Accessory.Categories.SWITCH;
+        accessoryType = Service.Switch;
+        break;
+      case 3: // PROGRAMMABLE SWITCH (fall through)
+      default:
+        deviceType = Accessory.Categories.PROGRAMMABLE_SWITCH;
+        accessoryType = Service.StatelessProgrammableSwitch;
+        break;
+    }
+    
+    accessory = new PlatformAccessory(name, uuid, deviceType);
+    accessory.addService(accessoryType, name);
 
     // Setting reachable to true
     accessory.reachable = true;
     accessory.context = {};
     
+    accessory.context.type = parameter.type;
+    accessory.context.typeName = typeName;
     accessory.context.deviceID = parameter.deviceID;
     accessory.context.model = parameter.model;
     accessory.context.ip = parameter.ip;
@@ -68,7 +96,19 @@ class Alarm_Switch {
     accessory.context.singleClick = parameter.singleClick; 
     accessory.context.doubleClick = parameter.doubleClick;
     accessory.context.disable = parameter.disable; 
-    accessory.context.lastMainState = false;
+    
+    switch(type){
+      case 1: // ALARM
+        accessory.context.lastCurrentAlarmState = 3; //DISARMED
+        accessory.context.lastTargetAlarmState = 3; //DISARM
+        break;
+      case 2: // VIRTUAL SWITCH
+        accessory.context.lastSwitchState = false;
+        break;
+      case 3: // PROGRAMMABLE SWITCH (fall through)
+      default:
+        break;
+    }
     
     accessory.getService(Service.AccessoryInformation)
       .setCharacteristic(Characteristic.Name, parameter.name)
@@ -88,14 +128,14 @@ class Alarm_Switch {
     this.getService(accessory);
   }
   
-  /********************************************************************************************************************************************************/
-  /********************************************************************************************************************************************************/
-  /********************************************************************* SERVICES *************************************************************************/
-  /********************************************************************************************************************************************************/
-  /********************************************************************************************************************************************************/
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Services
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 
   getService (accessory) {
     const self = this;
+    let type = accessory.context.type;
+    let service;
     
     //Refresh AccessoryInformation
     accessory.getService(Service.AccessoryInformation)
@@ -111,27 +151,59 @@ class Alarm_Switch {
       callback();
     });
     
-    let service = accessory.getService(Service.Switch);
+    switch(type){
+      case 1: // ALARM
+        service = accessory.getService(Service.SecuritySystem);
+        service.getCharacteristic(Characteristic.SecuritySystemCurrentState)
+          .setProps({
+            validValues: [1,3]
+          })
+          .updateValue(accessory.context.lastCurrentAlarmState);
+        service.getCharacteristic(Characteristic.SecuritySystemTargetState)
+          .setProps({
+            validValues: [1,3]
+          })
+          .updateValue(accessory.context.lastTargetAlarmState)
+          .on('set', self.setAlarm.bind(this, accessory, service));
+        break;
+      case 2: // VIRTUAL SWITCH
+        service = accessory.getService(Service.Switch);
+        service.getCharacteristic(Characteristic.On)
+          .updateValue(accessory.context.lastSwitchState)
+          .on('set', self.setAlarm.bind(this, accessory, service));
+        break;
+      case 3: // PROGRAMMABLE SWITCH (fall through)
+      default:
+        service = accessory.getService(Service.StatelessProgrammableSwitch);
+        service.getCharacteristic(Characteristic.ProgrammableSwitchEvent)
+          .setProps({
+            validValues: [0,1],
+            maxValue: 1,
+            minValue: 0
+          })
+          .on('set', function(value, callback){
+            value == 0 ? self.logger.info(accessory.displayName + ': Activate Event on \'Single Press\'') : self.logger.info(accessory.displayName + ': Activate Event on \'Double Press\'');
+            callback();
+          });
+    }
     
-    service.getCharacteristic(Characteristic.On)
-      .updateValue(accessory.context.lastMainState)
-      .on('set', function(state, callback) {
-        self.logger.info(accessory.displayName + ': ' + state);
-        accessory.context.lastMainState = state;
-        callback(null, state);
-      });
-    
-    /*if (!service.testCharacteristic(Characteristic.LearnAlarm))service.addCharacteristic(Characteristic.LearnAlarm);
+    if (!service.testCharacteristic(Characteristic.LearnAlarm))service.addCharacteristic(Characteristic.LearnAlarm);
     service.getCharacteristic(Characteristic.LearnAlarm)
       .updateValue(false)
-      .on('set', self.learnAlarm.bind(this, accessory, service));*/
+      .on('set', self.learnAlarm.bind(this, accessory, service));
     
     this.getSwitchState(accessory, service);
+    if(type == 1 || type == 2) setTimeout(function(){self.getAlarm(accessory, service);},5000); //Wait for connecting to switch first...
     
   }
   
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Get Switch State
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  
   getSwitchState(accessory, service){
     const self = this;
+    let type = accessory.context.type;
     if(!accessory.context.disable){
       miio.device({address: accessory.context.ip, token: accessory.context.token})
         .then(device => {
@@ -155,13 +227,24 @@ class Alarm_Switch {
                     break;
                   case 'long_click_press':
                     if(self.shortCount == accessory.context.singleClick && self.doubleCount == accessory.context.doubleClick){
-                      service.getCharacteristic(Characteristic.On).setValue(false);
-                      //service.getCharacteristic(Characteristic.On).updateValue(false)
+                      if(type == 1){
+                        service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(3);
+                        service.getCharacteristic(Characteristic.SecuritySystemTargetState).setValue(3);  
+                      } else if(type == 2){
+                        service.getCharacteristic(Characteristic.On).setValue(false);
+                      } else {
+                        service.getCharacteristic(Characteristic.ProgrammableSwitchEvent).setValue(1);  
+                      }
                     } else {
-                      //if(!service.getCharacteristic(Characteristic.LearnAlarm).value){
-                      service.getCharacteristic(Characteristic.On).setValue(true);
-                      //service.getCharacteristic(Characteristic.On).updateValue(true)
-                      //}
+                      if(type == 1){
+                        service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(1);
+                        service.getCharacteristic(Characteristic.SecuritySystemTargetState).setValue(1);  
+                      } else if(type == 2){
+                        service.getCharacteristic(Characteristic.On).updateValue(true);
+                        service.getCharacteristic(Characteristic.On).setValue(true);
+                      } else {
+                        service.getCharacteristic(Characteristic.ProgrammableSwitchEvent).setValue(0);
+                      }
                     }
                     break;
                   case 'long_click_release':
@@ -184,6 +267,205 @@ class Alarm_Switch {
     }
   }
   
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Get Alarm
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  
+  getAlarm(accessory, service){
+    const self = this;
+    let type = accessory.context.type;
+    if(!accessory.context.disable){
+      miio.device({address: accessory.context.ip, token: accessory.context.token})
+        .then(device => {
+          device.call('get_arming', [])
+            .then(result => {
+              if(result[0] === 'on') {
+                if(type == 1){
+                  accessory.context.lastTargetAlarmState = 1;
+                  accessory.context.lastCurrentAlarmState = 1;
+                  service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
+                  service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
+                } else if(type == 2){
+                  accessory.context.lastSwitchState = true;
+                  service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+                }
+              } else if(result[0] === 'off') {
+                if(type == 1){
+                  accessory.context.lastTargetAlarmState = 3;
+                  accessory.context.lastCurrentAlarmState = 3;
+                  service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
+                  service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
+                } else if(type == 2){
+                  accessory.context.lastSwitchState = false;
+                  service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+                }
+              } else {
+                if(result[0]!='oning'){
+                  self.logger.error(accessory.displayName + ': An error occured by getting alarm state!');
+                  self.logger.error(result[0]);
+                  if(type == 1){
+                    service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
+                    service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
+                  } else if(type == 2){
+                    service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+                  }
+                }
+              }
+              device.destroy();
+              setTimeout(function(){
+                self.getAlarm(accessory, service);
+              }, 10000);
+            })
+            .catch(err => {
+              self.logger.error(accessory.displayName + ': An error occured by getting alarm state!');
+              self.logger.error(err);
+              device.destroy();
+              if(type == 1){
+                service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
+                service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
+              } else if(type == 2){
+                service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+              }
+              setTimeout(function(){
+                self.getAlarm(accessory, service);
+              }, 30000);
+            });
+        })
+        .catch(err => {
+          self.logger.error(accessory.displayName + ': An error occured by connecting to gateway for getting new alarm state!');
+          self.logger.error(err);
+          if(type == 1){
+            service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(accessory.context.lastCurrentAlarmState);
+            service.getCharacteristic(Characteristic.SecuritySystemTargetState).updateValue(accessory.context.lastTargetAlarmState);
+          } else if(type == 2){
+            service.getCharacteristic(Characteristic.On).updateValue(accessory.context.lastSwitchState);
+          }
+          setTimeout(function(){
+            self.getAlarm(accessory, service);
+          }, 30000);
+        });
+    }
+  }
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Set Alarm
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  
+  setAlarm(accessory, service, state, callback){
+    const self = this;
+    let type = accessory.context.type;
+    let val;
+    if(type == 1){ // Alarm, 3 = OFF ; 1 = ON
+      state == 1 ? val = 'on' : val = 'off';
+    } else if(type == 2){ // Virtual Switch, state = ON ; !state = OFF 
+      state ? val = 'on' : val = 'off';
+    } else { // Programmable Switch, 1 = OFF ; 0 == ON
+      state == 0 ? val = 'on' : val = 'off';
+    }
+    if(!accessory.context.disable){
+      miio.device({address: accessory.context.ip, token: accessory.context.token})
+        .then(device => {
+          device.call('set_arming', [val])
+            .then(result => {
+              if(result[0] === 'ok') {
+                val == 'on' ? self.logger.info(accessory.displayName + ': Alarm activated!') : self.logger.info(accessory.displayName + ': Alarm deactivated!');
+                if(type == 1){
+                  service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(state);
+                  accessory.context.lastTargetAlarmState = state;
+                  accessory.context.lastCurrentAlarmState = state;
+                } else if (type == 2){
+                  service.getCharacteristic(Characteristic.On).updateValue(state);
+                  accessory.context.lastSwitchState = state;
+                }
+                callback(null, state);
+              } else {
+                self.logger.error(accessory.displayName + ': An error occured by setting alarm state!');
+                self.logger.error(result[0]);
+                if(type == 1){
+                  if(state == 1){
+                    service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(3);
+                    accessory.context.lastTargetAlarmState = 3;
+                    accessory.context.lastCurrentAlarmState = 3;
+                    callback(null, 3);
+                  } else {
+                    service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(1);
+                    accessory.context.lastTargetAlarmState = 1;
+                    accessory.context.lastCurrentAlarmState = 1;
+                    callback(null, 1);
+                  }
+                } else if (type == 2){
+                  if(state){
+                    service.getCharacteristic(Characteristic.On).updateValue(false);
+                    accessory.context.lastSwitchState = false;
+                    callback(null, false);
+                  } else {
+                    service.getCharacteristic(Characteristic.On).updateValue(true);
+                    accessory.context.lastSwitchState = true;
+                    callback(null, true);
+                  }
+                }
+              }
+            })
+            .catch(err => {
+              self.logger.error(accessory.displayName + ': An error occured by setting alarm state!');
+              self.logger.error(err);
+              callback(null);
+              setTimeout(function(){
+                if(type == 1){
+                  if(state == 1){
+                    service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(3);
+                    accessory.context.lastTargetAlarmState = 3;
+                    accessory.context.lastCurrentAlarmState = 3;
+                  } else {
+                    service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(1);
+                    accessory.context.lastTargetAlarmState = 1;
+                    accessory.context.lastCurrentAlarmState = 1;
+                  }
+                } else if (type == 2){
+                  if(state){
+                    service.getCharacteristic(Characteristic.On).updateValue(false);
+                    accessory.context.lastSwitchState = false;
+                  } else {
+                    service.getCharacteristic(Characteristic.On).updateValue(true);
+                    accessory.context.lastSwitchState = true;
+                  }
+                }
+              }, 500);
+            });
+        })
+        .catch(err => {
+          self.logger.error(accessory.displayName + ': An error occured by connecting to gateway for setting new alarm state!');
+          self.logger.error(err);
+          callback(null);
+          setTimeout(function(){
+            if(type == 1){
+              if(state == 1){
+                service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(3);
+                accessory.context.lastTargetAlarmState = 3;
+                accessory.context.lastCurrentAlarmState = 3;
+              } else {
+                service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(1);
+                accessory.context.lastTargetAlarmState = 1;
+                accessory.context.lastCurrentAlarmState = 1;
+              }
+            } else if (type == 2){
+              if(state){
+                service.getCharacteristic(Characteristic.On).updateValue(false);
+                accessory.context.lastSwitchState = false;
+              } else {
+                service.getCharacteristic(Characteristic.On).updateValue(true);
+                accessory.context.lastSwitchState = true;
+              }
+            }
+          }, 500);
+        });
+    }
+  }
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  // Options
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+  
   initialTimer(accessory, timer){
     const self = this;
     let duration = moment().unix()-timer;
@@ -198,15 +480,15 @@ class Alarm_Switch {
     }, 1000);
   }
   
-  /*learnAlarm(accessory, service, state, callback){
+  learnAlarm(accessory, service, state, callback){
     const self = this;
     if(state){
-      self.logger.info("Start learning...")
+      self.logger.info(accessory.displayName + ': Start learning...');
     } else {
-      self.logger.info("Stop learning...")
+      self.logger.info(accessory.displayName + ': Stop learning...');
     }
-    callback(null, state)
-  }*/
+    callback(null, state);
+  }
   
 }
 

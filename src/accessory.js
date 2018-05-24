@@ -285,7 +285,7 @@ class Alarm_Switch {
             self.reconnect += 1;
             device.destroy();
             self.getSwitchState(accessory, service);
-          }, 30 * 60 * 1000); //30 min
+          }, 10 * 60 * 1000); //10 min
         })
         .catch(err => {
           if(self.switchError > 5){

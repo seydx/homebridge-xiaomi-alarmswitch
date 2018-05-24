@@ -51,7 +51,7 @@ AlarmSwitch.prototype = {
   didFinishLaunching: function(){
     const self = this;
     if(!this.config.ip||!this.config.token){
-      this.logger.warn('No ip address and/or no token could be found in config, looking in storage..');
+      this.logger.debug('No ip address and/or no token could be found in config, looking in storage..');
       self.getIpAndToken(function (err, data) {
         if(err){
           self.logger.error('An error occured by getting ip adresse and token, trying again...');
@@ -61,9 +61,9 @@ AlarmSwitch.prototype = {
           }, 10000);
         } else {
           if(!Object.keys(self.switches).length||self.config.firstRun){
-            self.getDeviceID(data)
+            self.getDeviceID(data);
           } else {
-            self.initPlatform(data)
+            self.initPlatform(data);
           }
         }
       }); 
@@ -71,7 +71,7 @@ AlarmSwitch.prototype = {
       if(!Object.keys(this.switches).length||this.config.firstRun){
         self.getDeviceID({'ip':this.config.ip,'token':this.config.token});
       } else {
-        this.logger.info('IP adress and token found in config! Skip requesting...');
+        this.logger.debug('IP adress and token found in config! Skip requesting...');
         this.initPlatform({'ip':this.config.ip,'token':this.config.token});
       }
     }
@@ -106,8 +106,8 @@ AlarmSwitch.prototype = {
   getDeviceID: function(data){
     const self = this;
     const deviceArray = [];
-    this.logger.warn('Initializing First Run...');
-    if(this.storage.getItem('DeviceIDs'))self.logger.info('There are already stored Device IDs in your persist folder! Searching again...');
+    this.logger.info('Initializing First Run...');
+    if(this.storage.getItem('DeviceIDs'))this.logger.debug('There are already stored Device IDs in your persist folder! Searching again...');
     miio.device({ address: data.ip, token: data.token })
       .then(device => {
         self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']. Searching devices...');
@@ -144,8 +144,8 @@ AlarmSwitch.prototype = {
           self.log('    }                                                         ');
           self.log('                                                              ');
           self.log('**************************************************************');
-          self.logger.info('Closing connection...');
-          setTimeout(function(){if(Object.keys(self.switches).length)self.initPlatform(data)},3000);
+          self.logger.info('Search completed, closing connection...');
+          setTimeout(function(){if(Object.keys(self.switches).length)self.initPlatform(data);},3000);
         } else {
           self.logger.warn('Can not find any connected switches!');
           self.logger.warn('Closing current connection for trying again...');
@@ -171,6 +171,7 @@ AlarmSwitch.prototype = {
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
   
   initPlatform: function(data){
+    this.logger.info('Initalizing platform...');
     let parameter = {};
     for(const id of Object.keys(this.switches)) {
       if(!this.switches[id].disable){

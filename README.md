@@ -152,7 +152,7 @@ Type 3 (Programmable switch) uses the morse functionality, too. But it is not co
 | switches.resetTimer | no | Timer (in seconds) for resetting the switch if no input is detected (Default: 10) |
 | switches.morseCode | no | Order of click types (1 = single click, 2 = double click) which is needed to be clicked in right order to deactivate switch/alarm |
 
-See [Example Config](https://github.com/SeydX/homebridge-tado-platform/edit/master/example-config.json) for more details.
+See [Example Config](https://github.com/SeydX/homebridge-xiaomi-alarmswitch/edit/master/example-config.json) for more details.
 
 
 

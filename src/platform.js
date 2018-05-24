@@ -131,6 +131,7 @@ AlarmSwitch.prototype = {
           self.log('    {                                                         ');
           self.log('      "platform":"AlarmSwitch",                               ');
           self.log('      "name":"%s",                                            ', self.config.name||'Alarm');
+          self.log('      "firstRun":false,                                       ');
           self.log('      "ip":"%s",                                              ', data.ip);
           self.log('      "token":"%s",                                           ', data.token);
           self.log('      "switches":{                                            ');

@@ -60,11 +60,15 @@ AlarmSwitch.prototype = {
             self.didFinishLaunching();
           }, 10000);
         } else {
-          !Object.keys(self.switches).length ? self.getDeviceID(data) : self.initPlatform(data);
+          if(!Object.keys(self.switches).length||self.config.firstRun){
+            self.getDeviceID(data)
+          } else {
+            self.initPlatform(data)
+          }
         }
       }); 
     } else {
-      if(!Object.keys(this.switches).length){
+      if(!Object.keys(this.switches).length||this.config.firstRun){
         self.getDeviceID({'ip':this.config.ip,'token':this.config.token});
       } else {
         this.logger.info('IP adress and token found in config! Skip requesting...');
@@ -102,9 +106,8 @@ AlarmSwitch.prototype = {
   getDeviceID: function(data){
     const self = this;
     const deviceArray = [];
-    this.logger.warn('Can not find any switches in config! Searching...');
-    if(this.storage.getItem('DeviceIDs'))self.logger.info('There are stored Device IDs in your persist folder!');
-    this.logger.warn('Can not find any switches in config! Searching...');
+    this.logger.warn('Initializing First Run...');
+    if(this.storage.getItem('DeviceIDs'))self.logger.info('There are already stored Device IDs in your persist folder! Searching again...');
     miio.device({ address: data.ip, token: data.token })
       .then(device => {
         self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']. Searching devices...');
@@ -142,6 +145,7 @@ AlarmSwitch.prototype = {
           self.log('                                                              ');
           self.log('**************************************************************');
           self.logger.info('Closing connection...');
+          setTimeout(function(){if(Object.keys(self.switches).length)self.initPlatform(data)},3000);
         } else {
           self.logger.warn('Can not find any connected switches!');
           self.logger.warn('Closing current connection for trying again...');

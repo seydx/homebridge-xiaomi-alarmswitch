@@ -28,10 +28,9 @@ class Alarm_Switch {
     this.config = platform.config;
     this.accessories = platform.accessories;
     this.timer;
-    this.shortCount = 0;
-    this.doubleCount = 0;
     this.error = 0;
     this.reconnect = 0;
+    this.morseError = 0;
     
     if (publish) {
       this.addAccessory(parameter);
@@ -95,9 +94,9 @@ class Alarm_Switch {
     accessory.context.ip = parameter.ip;
     accessory.context.token = parameter.token; 
     accessory.context.resetTimer = parameter.resetTimer; 
-    accessory.context.singleClick = parameter.singleClick; 
-    accessory.context.doubleClick = parameter.doubleClick;
     accessory.context.disable = parameter.disable; 
+    accessory.context.morseCode = parameter.morseCode; 
+    accessory.context.morseArray = [];
     
     switch(type){
       case 1: // ALARM
@@ -207,6 +206,7 @@ class Alarm_Switch {
   getSwitchState(accessory, service){
     const self = this;
     let type = accessory.context.type;
+    accessory.context.morseArray = JSON.parse(JSON.stringify(accessory.context.morseCode));
     if(!accessory.context.disable){
       miio.device({address: accessory.context.ip, token: accessory.context.token})
         .then(device => {
@@ -222,15 +222,35 @@ class Alarm_Switch {
                 self.timer = moment().unix();
                 switch(action.action){
                   case 'click':
-                    self.shortCount += 1;
                     self.logger.info(accessory.displayName + ': ' + action.action);
+                    if(accessory.context.morseArray[0] == 1){
+                      accessory.context.morseArray.splice(0, 1); 
+                    } else {
+                      if(self.morseError >= 2){
+                        self.morseError = 0;
+                        self.logger.info('Forgotten your morse code? Hint [' + accessory.context.morseCode + ']');  
+                      } else {
+                        self.morseError += 1; 
+                      }
+                      accessory.context.morseArray = JSON.parse(JSON.stringify(accessory.context.morseCode));
+                    }
                     break;
                   case 'double_click':
-                    self.doubleCount += 1;
                     self.logger.info(accessory.displayName + ': ' + action.action);
+                    if(accessory.context.morseArray[0] == 2){
+                      accessory.context.morseArray.splice(0, 1); 
+                    } else {
+                      if(self.morseError >= 2){
+                        self.morseError = 0;
+                        self.logger.info('Forgotten your morse code? Hint [' + accessory.context.morseCode + ']');  
+                      } else {
+                        self.morseError += 1; 
+                      }
+                      accessory.context.morseArray = JSON.parse(JSON.stringify(accessory.context.morseCode));
+                    }
                     break;
                   case 'long_click_press':
-                    if(self.shortCount == accessory.context.singleClick && self.doubleCount == accessory.context.doubleClick){
+                    if(!accessory.context.morseArray.length){
                       if(type == 1){
                         service.getCharacteristic(Characteristic.SecuritySystemCurrentState).updateValue(3);
                         service.getCharacteristic(Characteristic.SecuritySystemTargetState).setValue(3);  
@@ -253,8 +273,7 @@ class Alarm_Switch {
                     break;
                   case 'long_click_release':
                   default:
-                    self.shortCount = 0;
-                    self.doubleCount = 0;
+                    accessory.context.morseArray = JSON.parse(JSON.stringify(accessory.context.morseCode));
                     break;
                 }
               });
@@ -493,8 +512,7 @@ class Alarm_Switch {
     let duration = moment().unix()-timer;
     if(!isNaN(duration) && duration > accessory.context.resetTimer-1 && duration < accessory.context.resetTimer+1){
       self.logger.info('No input over ' + accessory.context.resetTimer + ' seconds, resetting...');
-      self.shortCount = 0;
-      self.doubleCount = 0;
+      accessory.context.morseArray = JSON.parse(JSON.stringify(accessory.context.morseCode));
       self.timer;
     }
     setTimeout(function(){

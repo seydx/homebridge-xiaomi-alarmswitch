@@ -1,6 +1,6 @@
 {
   "name": "homebridge-xiaomi-alarmswitch",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "homebridge-xiaomi-alarmswitch",
   "main": "index.js",
   "devDependencies": {},

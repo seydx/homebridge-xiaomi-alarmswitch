@@ -10,10 +10,10 @@
 	    "token":"1234567890abcdefghijklmnop",
 	    "switches":{
 		    "123abc456def890ghi":{
+			    "type":1,
 			    "disable":false,
 			    "resetTimer":10,
-			    "singleClick":1,
-			    "doubleClick":2
+			    "morseCode":[2,1,2]
 		    }
 		}
     }

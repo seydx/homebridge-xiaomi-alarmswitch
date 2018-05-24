@@ -65,6 +65,7 @@ To use the plugin, add the following basic configuration to your config.json tha
      {
        "platform":"AlarmSwitch",
        "name":"Alarm",
+       "firstRun":false,
        "ip":"192.168.1.1",
        "token":"12345678910abcdefghijklmnop",
        "switches":{
@@ -94,6 +95,7 @@ Now, the plugin have stored all necessary information into your persist folder. 
     {
       "platform":"AlarmSwitch",
       "name":"Alarm Switch",
+      "firstRun":false,
       "ip":"192.168.1.1",
       "token":"abcdefghijklmon123456789",
       "switches":{
@@ -146,6 +148,7 @@ Type 3 (Programmable switch) uses the morse functionality, too. But it is not co
 | name | no | Name for the switch. Will be used as part of the accessory name.  |
 | ip | no | IP adresse from the Gateway (if no setted in config, the plugin will automatically find the ip)  |
 | token | no | Token from the Gateway (if no setted in config, the plugin will automatically find the token)  |
+| firstRun | no | Manually invokes the "First run" function to list all connected devices and an example config in your terminal  |
 | switches.id | Yes | Device ID from the switch(es) that you want to control with this plugin |
 | switches.type | no | Defines which type of accessory should be exposed to HomeKit (1 = Alarm, 2 = Virtual Switch, 3 = Programmable Switch, default: 1)  |
 | switches.disable | no | If disable = true, the switch will be removed from HomeKit (Default: false)  |

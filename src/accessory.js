@@ -31,6 +31,7 @@ class Alarm_Switch {
     this.shortCount = 0;
     this.doubleCount = 0;
     this.error = 0;
+    this.reconnect = 0;
     
     if (publish) {
       this.addAccessory(parameter);
@@ -194,6 +195,7 @@ class Alarm_Switch {
       .on('set', self.learnAlarm.bind(this, accessory, service));
     
     this.getSwitchState(accessory, service);
+    this.initialTimer(accessory, this.timer);
     if(type == 1 || type == 2) setTimeout(function(){self.getAlarm(accessory, service);},5000); //Wait for connecting to switch first...
     
   }
@@ -209,13 +211,13 @@ class Alarm_Switch {
       miio.device({address: accessory.context.ip, token: accessory.context.token})
         .then(device => {
           self.switchError = 0;
-          self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']');
-          self.logger.info('Searching for switch with ID:' + accessory.context.deviceID);
-          self.initialTimer(accessory, self.timer);
+          self.reconnect==0 ? self.logger.info('Connected to Gateway ' + device.miioModel + ' [' + device.id + ']') : self.logger.debug('Reconnected to Gateway ' + device.miioModel + ' [' + device.id + ']');
+          if(self.reconnect==0)self.logger.info('Searching for switch with ID:' + accessory.context.deviceID);
           let children = device.children();
           for(const child of children){
             if(child.matches('type:button')&&child.internalId==accessory.context.deviceID){
-              self.logger.info('Connected to ' + child.miioModel + ' [' + child.internalId + ']');
+              self.reconnect==0 ? self.logger.info('Connected to ' + child.miioModel + ' [' + child.internalId + ']') : self.logger.debug('Reconnected to ' + child.miioModel + ' [' + child.internalId + ']');
+              self.reconnect = 0;
               child.on('action', action => {
                 self.timer = moment().unix();
                 switch(action.action){
@@ -258,6 +260,13 @@ class Alarm_Switch {
               });
             }
           }
+          // Restart miio every 30 minutes or so to make sure we are listening to announcements
+          setTimeout(function(){
+            self.logger.debug('Reconnecting..');
+            self.reconnect += 1;
+            device.destroy();
+            self.getSwitchState(accessory, service);
+          }, 30 * 60 * 1000); //30 min
         })
         .catch(err => {
           if(self.switchError > 5){

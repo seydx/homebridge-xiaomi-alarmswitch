@@ -1,4 +1,4 @@
-# homebridge-xiaomi-alarmswitch v2.0
+# homebridge-xiaomi-alarmswitch v2.1
 
 Homebridge dynamic platform plugin for Xiaomi Aqara Switches with morse code functionality
 
@@ -72,8 +72,7 @@ To use the plugin, add the following basic configuration to your config.json tha
                 "type": 1,
                 "disable":false,
                 "resetTimer":10,
-                "singleClick":1,
-                "doubleClick":2
+                "morseCode": [2,1,2]
            }
        }
      }
@@ -102,15 +101,13 @@ Now, the plugin have stored all necessary information into your persist folder. 
           "type":1,
           "disable":false,
           "resetTimer":10,
-          "singleClick":1,
-          "doubleClick":2
+          "morseCode": [1,1,2]
         },
         "124a45678bc902":{
           "type":2,
           "disable":false,
           "resetTimer":15,
-          "singleClick":2,
-          "doubleClick":3
+          "morseCode": [2,1,1]
         }
       }
     }
@@ -123,8 +120,9 @@ See [Example Config](https://github.com/SeydX/homebridge-xiaomi-alarmswitch/edit
 
 ## Functionality of the morse code
 - You can give every switch a value for a **single click** and for a **double click**
-- The **long click** acts only for **confirmation/checking** (morse code) or setting the switch on (if no code is given)
-- **Example**: singleClick = 1 and doubleClick = 2 (see example-config above), this means that after entering the 1x "single click" and 2x "double click" (order does not matter) and then confirm it with a "long click", the switch/alarm will turn off, after entering a "long click" again, the switch/alarm will turn on.
+- The **long click** acts only for **confirmation and checking** of the morse code OR turning the switch/alarm on if the morseCode was not given or it was given wrong
+- **Example**: morseCode = [2,1,2] (see example-config above), this means that after entering the needed clicks in right order (in this example it is double click, single click, double click) and confirming it with a "long click", the switch/alarm will turn off, after entering a "long click" again, the switch/alarm will turn on.
+- **Morse code click types:** 1 = Single Click ; 2 = Double Click
 
 ## Types
 There are 3 types of accessories which can be assigned to the switches in the config.json.
@@ -135,7 +133,7 @@ There are 3 types of accessories which can be assigned to the switches in the co
 
 ![](https://raw.githubusercontent.com/SeydX/homebridge-xiaomi-alarmswitch/master/images/types.png)
 
-**Note:** All types except type 3 are directly connected with the gateway alarm system. That means, if you "long click" the button you have assigned in the config.json the alarm will trigger on. If you give the "morse code" and confirm it with a "long click" the alarm will trigger off.
+**Note:** All types except type 3 are directly connected with the gateway alarm system. That means, if you "long click" the button you have assigned in the config.json the alarm will trigger on. If you give the **morse code** setted in config.json in **right order** and confirm it with a **long click** the alarm will trigger off.
 
 Type 3 (Programmable switch) uses the morse functionality, too. But it is not connected to the gateway alarm sytem. You can assign the single taps and double taps different automations or scenes in Apple HomeKit. But keep in mind, to activate the event on "single tap" you have to "long lick" the switch and for activating the "double tap" event you have to give the morse code and confirm it with a "long click". The advantage of type 3 is, it's up to you what you want to control with it.
 
@@ -152,8 +150,7 @@ Type 3 (Programmable switch) uses the morse functionality, too. But it is not co
 | switches.type | no | Defines which type of accessory should be exposed to HomeKit (1 = Alarm, 2 = Virtual Switch, 3 = Programmable Switch, default: 1)  |
 | switches.disable | no | If disable = true, the switch will be removed from HomeKit (Default: false)  |
 | switches.resetTimer | no | Timer (in seconds) for resetting the switch if no input is detected (Default: 10) |
-| switches.singleClick | no | Amount of single clicks (Default: 1) |
-| switches.disable | no | Amount of double clicks (Default: 1) |
+| switches.morseCode | no | Order of click types (1 = single click, 2 = double click) which is needed to be clicked in right order to deactivate switch/alarm |
 
 See [Example Config](https://github.com/SeydX/homebridge-tado-platform/edit/master/example-config.json) for more details.
 
@@ -175,7 +172,7 @@ This plugin has been verified to work with the following apps on iOS 11.3.1:
 **TODO**
 - [ ] "Learn Code" Function (partial)
 - [x] Prorammable switch
-- [ ] Option to set also the order of clicks
+- [x] Option to set also the order of clicks
 - [x] Expose automatically all available switches
 - [x] Dynamically remove/add switches (partial)
 

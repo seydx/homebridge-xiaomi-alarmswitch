@@ -103,7 +103,7 @@ AlarmSwitch.prototype = {
     const self = this;
     const deviceArray = [];
     this.logger.warn('Can not find any switches in config! Searching...');
-    if(this.storage.getItem('DeviceIDs'))self.logger.info("There are stored Device IDs in your persist folder!");
+    if(this.storage.getItem('DeviceIDs'))self.logger.info('There are stored Device IDs in your persist folder!');
     this.logger.warn('Can not find any switches in config! Searching...');
     miio.device({ address: data.ip, token: data.token })
       .then(device => {
@@ -135,8 +135,7 @@ AlarmSwitch.prototype = {
           self.log('               "type": 1,                                     ');
           self.log('               "disable":false,                               ');
           self.log('               "resetTimer":10,                               ');
-          self.log('               "singleClick":1,                               ');
-          self.log('               "doubleClick":2                                ');
+          self.log('               "morseCode":[2,1,2]                            ');
           self.log('          }                                                   ');
           self.log('      }                                                       ');
           self.log('    }                                                         ');
@@ -190,8 +189,7 @@ AlarmSwitch.prototype = {
           parameter['model'] = 'lumi.alarm';
           parameter['disable'] = this.switches[id].disable||false;
           parameter['resetTimer'] = this.switches[id].resetTimer||10;
-          parameter['singleClick'] = this.switches[id].singleClick||1;
-          parameter['doubleClick'] = this.switches[id].doubleClick||1;
+          parameter['morseCode'] = this.switches[id].morseCode||[1];
           new Device(this, parameter, true);
         }
       } else {
@@ -230,9 +228,8 @@ AlarmSwitch.prototype = {
     for(const id of Object.keys(this.switches)) {
       if(id == accessory.context.deviceID){	 
         skip = true;    
-        accessory.context.singleClick = this.switches[id].singleClick||1;
-        accessory.context.doubleClick = this.switches[id].doubleClick||1;
         accessory.context.resetTimer = this.switches[id].resetTimer||10;
+        accessory.context.morseCode = this.switches[id].morseCode||[1];
         if(this.switches[id].type!=accessory.context.type){
           accessory.context.disable = true;
         } else {
